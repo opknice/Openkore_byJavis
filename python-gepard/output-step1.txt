@@ -1,0 +1,8 @@
+step1_verify.py
+==================================================
+  Step 1 - Verify Process + Socket
+==================================================
+[PROCESS] ✓ Opened PID=19272
+
+[SOCKET] Scanning handles...
+[SOCKET] ✗ Not found
