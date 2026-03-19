@@ -302,6 +302,19 @@ serverType kRO_RagexeRE_2009_11_04a
 serverEncoding Western
 addTableFolders translated/kRO_english;kRO
 
+######################
+# Private Server (Gepard)
+
+[Private - Gepard Server]
+ip 127.0.0.1
+port 24657
+private 1
+master_version 1
+version 20
+serverType kRO_RagexeRE_2009_11_04a
+serverEncoding Western
+addTableFolders translated/kRO_english;kRO
+
 ####################
 # Dead
 

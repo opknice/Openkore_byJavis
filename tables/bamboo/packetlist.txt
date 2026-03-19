@@ -1,0 +1,51 @@
+# BamBoo Gepard V3 Packet List
+# Generated from ro_packet_parser_v3_proxy_mitm.py
+# 
+# ID = PACKET ID
+# LEN = PACKET LENGTH (-1 = variable)
+# TYPE = RECV: Server -> Client, SEND: Client -> Server
+
+// Server -> Client (recv)
+ID   LEN TYPE PACKET_NAME              DESCRIPTION
+0073 11  recv map_loaded              Map loaded confirmation
+0078 -1  recv actor_exists             Actor exists (spawn)
+007B -1  recv actor_exists2            Actor exists variant 2
+007C -1  recv map_actor                NPC/Monster on map
+0080 7   recv actor_removed            Actor removed/disappeared
+0086 16  recv actor_moved              Actor movement
+0087 -1  recv actor_moved2             Actor movement variant 2
+0088 29  recv damage                  Damage notification
+008D -1  recv public_chat              Public chat message
+0095 30  recv actor_name              Actor name
+009A -1  recv system_chat             System chat message
+00B0 8   recv stat_info              Status info (HP/SP)
+00B6 6   recv actor_coords            Actor coordinates
+00BD -1  recv stats_info              Extended stats info
+0141 14  recv stat_info2             Status info (STR/AGI/VIT/INT/DEX/LUK)
+0195 30  recv actor_name2             Actor name variant 2
+022C -1  recv actor_spawned           Actor spawned
+02AE -1  recv init_encrypt            Initialize encryption (Gepard)
+02EE -1  recv actor_display           Actor display
+083E -1  recv init_encrypt2           Initialize encryption variant 2
+0856 -1  recv actor_display4          Actor display variant 4
+09FD -1  recv actor_display2          Actor display variant 2
+09FF -1  recv actor_display3          Actor display variant 3
+
+// Client -> Server (send)
+ID   LEN TYPE PACKET_NAME              DESCRIPTION
+0072 -1  send map_login               Map login
+0436 -1  send map_login2              Map login variant 2
+007D 2   send map_loaded_ack          Map loaded acknowledgment
+0085 -1  send walk                    Walk/move request
+0089 -1  send action                  Action request (attack/sit/stand)
+009F -1  send item_take               Take item request
+
+// BamBoo-specific signals (internal)
+ID   LEN TYPE PACKET_NAME              DESCRIPTION
+0000 -1  recv null_packet             Null packet
+0001 2   recv signal_01                Signal 01
+013A 2   recv signal_13a               Signal 13A
+1901 2   recv signal_1901              Signal 1901
+1A01 2   recv signal_1a01             Signal 1A01
+FD00 8   recv signal_fd00             Signal FD00
+FE00 8   recv signal_fe00             Signal FE00

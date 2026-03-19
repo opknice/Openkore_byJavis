@@ -1,12 +1,14 @@
-# ro_packet_parser_v3.py
-# แก้ไข: stream alignment, encryption detection, memory cross-check
-# ต้องรันใฐานะ Administrator
-# pip install pydivert
+# ro_packet_parser_v3_proxy.py
+# แก้ไขเป็น Local Translator Proxy สำหรับ OpenKore (XKore 1 / Local Server mode)
+# BamBoo Server <--> Python (ดัก + แปลง ID/โครงสร้าง) <--> OpenKore
+# ตัว BamBoo_Client.exe ยังรันปกติเพื่อ bypass Gepard + ใช้ Memory สำหรับ verify/summary
+# OpenKore ตั้งค่า connect ไปที่ 127.0.0.1:24656 (แทน server จริง)
 
-import pydivert
 import struct, time, os, ctypes, ctypes.wintypes as wt
 import logging
 from datetime import datetime
+import socket
+import threading
 
 # ── Config ──────────────────────────────────────────────
 SERVER_IP   = "136.110.172.32"
@@ -46,7 +48,7 @@ log_main = make_logger("main",    f"{LOG_DIR}/ro_session_{_ts}.log")
 log_raw  = make_logger("raw",     f"{LOG_DIR}/ro_raw_{_ts}.log")
 log_unk  = make_logger("unknown", f"{LOG_DIR}/ro_unknown_{_ts}.log")
 log_sum  = make_logger("summary", f"{LOG_DIR}/ro_summary_{_ts}.log")
-log_ver  = make_logger("verify",  f"{LOG_DIR}/ro_verify_{_ts}.log")  # ← ใหม่
+log_ver  = make_logger("verify",  f"{LOG_DIR}/ro_verify_{_ts}.log")
 
 # console handler
 sh = logging.StreamHandler()
@@ -76,43 +78,18 @@ def init_memory(pid):
         LOG("  [MEM   ] WARNING: ไม่พบ BamBoo_Client.exe")
 
 def _find_pid(exe_name):
-    """หา PID โดยใช้ Windows API โดยตรง — ไม่สร้าง subprocess"""
-    TH32CS_SNAPPROCESS = 0x00000002
-
-    class PROCESSENTRY32(ctypes.Structure):
-        _fields_ = [
-            ("dwSize",              wt.DWORD),
-            ("cntUsage",            wt.DWORD),
-            ("th32ProcessID",       wt.DWORD),
-            ("th32DefaultHeapID",   ctypes.POINTER(ctypes.c_ulong)),
-            ("th32ModuleID",        wt.DWORD),
-            ("cntThreads",          wt.DWORD),
-            ("th32ParentProcessID", wt.DWORD),
-            ("pcPriClassBase",      ctypes.c_long),
-            ("dwFlags",             wt.DWORD),
-            ("szExeFile",           ctypes.c_char * 260),
-        ]
-
-    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    if snap == ctypes.c_void_p(-1).value:
-        return 0
-
-    entry = PROCESSENTRY32()
-    entry.dwSize = ctypes.sizeof(PROCESSENTRY32)
-
-    pid = 0
-    if k32.Process32First(snap, ctypes.byref(entry)):
-        while True:
-            name = entry.szExeFile.decode('utf-8', errors='replace')
-            if name.lower() == exe_name.lower():
-                pid = entry.th32ProcessID
-                break
-            if not k32.Process32Next(snap, ctypes.byref(entry)):
-                break
-
-    k32.CloseHandle(snap)
-    return pid
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ['tasklist', '/FI', f'IMAGENAME eq {exe_name}', '/NH', '/FO', 'CSV'],
+            stderr=subprocess.DEVNULL).decode()
+        for line in out.strip().splitlines():
+            parts = line.strip('"').split('","')
+            if len(parts) >= 2 and parts[0].lower() == exe_name.lower():
+                return int(parts[1])
+    except Exception:
+        pass
+    return 0
 
 def read_u32(addr):
     if not _mem_handle:
@@ -126,7 +103,6 @@ def read_u32(addr):
     return None
 
 def mem_snapshot():
-    """อ่านค่าจาก memory ทั้งหมดในครั้งเดียว"""
     return {
         'x':     read_u32(PLAYER_X_ADDR),
         'y':     read_u32(PLAYER_Y_ADDR),
@@ -136,9 +112,7 @@ def mem_snapshot():
         'spmax': read_u32(SPMAX_ADDR),
     }
 
-# ── Known packet table: switch → (name, fixed_len) ───────
-# -1 = variable (bytes 2-3 = length)
-# 0  = unknown length
+# ── Known packet table (BamBoo custom) ─────────────────────
 PACKETS = {
     # Server → Client
     0x0073: ("map_loaded",         11),
@@ -149,8 +123,6 @@ PACKETS = {
     0x0086: ("actor_moved",        16),
     0x0087: ("actor_moved2",       -1),
     0x0088: ("damage",             29),
-    0x4753: ("map_login_ack",      -1),
-    0x0B1D: ("batch_packet",       -1),
     0x008D: ("public_chat",        -1),
     0x0095: ("actor_name",         30),
     0x009A: ("system_chat",        -1),
@@ -160,20 +132,20 @@ PACKETS = {
     0x0141: ("stat_info2",         14),
     0x0195: ("actor_name2",        30),
     0x022C: ("actor_spawned",      -1),
-    0x02AE: ("init_encrypt",       -1),  # key exchange
+    0x02AE: ("init_encrypt",       -1),
     0x02EE: ("actor_display",      -1),
     0x083E: ("init_encrypt2",      -1),
     0x0856: ("actor_display4",     -1),
     0x09FD: ("actor_display2",     -1),
     0x09FF: ("actor_display3",     -1),
-    # ── Bamboo-specific / confirmed from logs ──────────────
-    0x0000: ("null_packet",        -1),  # skill/item list entries
-    0x0001: ("signal_01",           2),  # ← FIX: 2-byte signal (ไม่ใช่ variable)
-    0x013A: ("signal_13a",          2),  # ← FIX: 2-byte signal
-    0x1901: ("signal_1901",         2),  # 2-byte signal
-    0x1A01: ("signal_1a01",         2),  # 2-byte signal
-    0xFD00: ("signal_fd00",         8),  # 8-byte signal
-    0xFE00: ("signal_fe00",         8),  # 8-byte signal
+    # Bamboo-specific
+    0x0000: ("null_packet",        -1),
+    0x0001: ("signal_01",           2),
+    0x013A: ("signal_13a",          2),
+    0x1901: ("signal_1901",         2),
+    0x1A01: ("signal_1a01",         2),
+    0xFD00: ("signal_fd00",         8),
+    0xFE00: ("signal_fe00",         8),
     # Client → Server
     0x0072: ("map_login",          -1),
     0x0436: ("map_login2",         -1),
@@ -182,6 +154,34 @@ PACKETS = {
     0x0089: ("action",             -1),
     0x009F: ("item_take",          -1),
 }
+
+# ── Packet Translation Map (Custom BamBoo <--> Standard RO สำหรับ OpenKore)
+# แก้ไขตรงนี้ถ้า Standard ID ของ OpenKore ต่างจาก BamBoo
+CUSTOM_TO_STANDARD = {
+    0x0073: 0x0073, 0x0078: 0x0078, 0x007B: 0x007B, 0x007C: 0x007C,
+    0x0080: 0x0080, 0x0086: 0x0086, 0x0087: 0x0087, 0x0088: 0x0088,
+    0x008D: 0x008D, 0x0095: 0x0095, 0x009A: 0x009A, 0x00B0: 0x00B0,
+    0x00B6: 0x00B6, 0x00BD: 0x00BD, 0x0141: 0x0141, 0x0195: 0x0195,
+    0x022C: 0x022C, 0x02AE: 0x02AE, 0x02EE: 0x02EE, 0x083E: 0x083E,
+    0x0856: 0x0856, 0x09FD: 0x09FD, 0x09FF: 0x09FF,
+    0x0000: 0x0000, 0x0001: 0x0001, 0x013A: 0x013A,
+    0x1901: 0x1901, 0x1A01: 0x1A01, 0xFD00: 0xFD00, 0xFE00: 0xFE00,
+    0x0072: 0x0072, 0x0436: 0x0436, 0x007D: 0x007D,
+    0x0085: 0x0085, 0x0089: 0x0089, 0x009F: 0x009F,
+}
+STANDARD_TO_CUSTOM = {v: k for k, v in CUSTOM_TO_STANDARD.items()}
+
+def translate_to_standard(data):
+    if len(data) < 2: return data
+    sw = struct.unpack_from('<H', data, 0)[0]
+    new_sw = CUSTOM_TO_STANDARD.get(sw, sw)
+    return struct.pack('<H', new_sw) + data[2:]
+
+def translate_to_custom(data):
+    if len(data) < 2: return data
+    sw = struct.unpack_from('<H', data, 0)[0]
+    new_sw = STANDARD_TO_CUSTOM.get(sw, sw)
+    return struct.pack('<H', new_sw) + data[2:]
 
 # ── Encryption ────────────────────────────────────────────
 class Decryptor:
@@ -341,7 +341,7 @@ def handle_actor_display(data, sw):
             for off in [46, 50, 54, 42, 38]:
                 if off + 3 <= len(data):
                     x, y, _ = dec3(data[off:off+3])
-                    if 0 < x < 512 and 0 < y < 512:
+                    if 0 < x < 2000 and 0 < y < 2000:
                         tracker.update(eid, x=x, y=y, type=jtype)
                         label = "MONSTER" if jtype >= MONSTER_TYPE_MIN else "player"
                         name  = tracker.N.get(eid, '')
@@ -356,7 +356,7 @@ def handle_actor_display(data, sw):
                     for co in [54, 58, 50, 46]:
                         if co + 3 <= len(data):
                             x, y, _ = dec3(data[co:co+3])
-                            if 0 < x < 512 and 0 < y < 512:
+                            if 0 < x < 2000 and 0 < y < 2000:
                                 tracker.update(eid, x=x, y=y, type=t[0])
                                 label = "MONSTER" if t[0] >= MONSTER_TYPE_MIN else "player"
                                 LOG(f"  [{label:7s}] 0x{eid:08X} type={t[0]} ({x},{y})")
@@ -398,8 +398,11 @@ def handle_init_encrypt(data):
         return
     LOG(f"  [CRYPT ] init_encrypt received [{len(data)}B] hex={data[:16].hex()}")
 
-# ── Dispatcher ────────────────────────────────────────────
+
+# ── Dispatcher (เพิ่มการส่งไปยังอีกฝั่ง) ─────────────────────
 _seen_unk = {}
+server_sock = None
+openkore_sock = None
 
 def dispatch(data, direction):
     if len(data) < 2:
@@ -409,11 +412,9 @@ def dispatch(data, direction):
     sw     = raw_sw
     dec    = False
 
-    # decrypt ถ้า client→server และ encryption เปิดอยู่
     if direction == "→" and crypt.on:
         sw, dec = crypt.decrypt(raw_sw)
 
-    # log raw
     enc_tag = f" [enc→0x{sw:04X}]" if dec else ""
     LOGR(f"{direction} 0x{sw:04X} [{len(data)}B]{enc_tag} {data[:32].hex(' ')}")
 
@@ -429,8 +430,6 @@ def dispatch(data, direction):
         return
 
     name, _ = info
-
-    # suppress noisy packets จาก log หลัก
     _silent = {'null_packet', 'signal_01', 'signal_13a',
                'signal_1901', 'signal_1a01', 'signal_fd00', 'signal_fe00'}
     if name not in _silent:
@@ -438,11 +437,11 @@ def dispatch(data, direction):
 
     d = data if not dec else struct.pack('<H', sw) + data[2:]
 
+    # เรียก handler เดิม
     if sw in (0x02AE, 0x083E): handle_init_encrypt(d)
     elif sw == 0x0086:          handle_actor_moved(d)
     elif sw == 0x00B6:          handle_actor_coords(d)
-    elif sw in (0x022C, 0x09FD, 0x09FF, 0x0856,
-                0x02EE, 0x0078, 0x007B, 0x007C):
+    elif sw in (0x022C, 0x09FD, 0x09FF, 0x0856, 0x02EE, 0x0078, 0x007B, 0x007C):
         handle_actor_display(d, sw)
     elif sw == 0x0080:          handle_actor_removed(d)
     elif sw in (0x0095, 0x0195): handle_actor_name(d)
@@ -452,42 +451,30 @@ def dispatch(data, direction):
         crypt.reset()
         snap = mem_snapshot()
         LOG(f"  [MAP   ] Entered game | memory: {snap}")
-    elif sw == 0x0B1D:
-        # batch packet — แกะ 0x00B6 packets ข้างในออก
-        if len(d) > 4:
-            inner = d[4:]
-            i = 0
-            while i + 6 <= len(inner):
-                isw = struct.unpack_from('<H', inner, i)[0]
-                if isw == 0x00B6:
-                    dispatch(inner[i:i+6], direction)
-                    i += 6
-                else:
-                    i += 1
-    elif sw == 0x4753:
-        LOG(f'  [MAP   ] map_login_ack [{len(d)}B]')
-    elif sw == 0x0000:
-        # null variable packet — อาจมี 0x00B0 stats ข้างใน
-        inner = d[4:] if len(d) > 4 else b''
-        i = 0
-        while i + 2 <= len(inner):
-            isw = struct.unpack_from('<H', inner, i)[0]
-            if isw == 0x00B0 and i+8 <= len(inner):
-                dispatch(inner[i:i+8], direction)
-                i += 8
-            elif isw == 0x0141 and i+14 <= len(inner):
-                dispatch(inner[i:i+14], direction)
-                i += 14
-            else:
-                i += 1
-    elif sw in (0x0001, 0x013A, 0x1901, 0x1A01):
-        pass  # 2-byte signal packets — รับทราบเงียบๆ
-    elif sw in (0xFD00, 0xFE00):
-        pass  # 8-byte signal packets — รับทราบเงียบๆ
-    elif sw == 0x0000:
-        pass  # null/skill/item entries — suppress flood
+    elif sw in (0x0001, 0x013A, 0x1901, 0x1A01, 0xFD00, 0xFE00, 0x0000):
+        pass
 
-# ── Stream buffer with sync ───────────────────────────────
+    # === TRANSLATOR PROXY: ส่งไปยังอีกฝั่ง ===
+    global openkore_sock, server_sock
+    if openkore_sock and server_sock:
+        if direction == "←":   # Server → OpenKore (custom → standard)
+            translated = translate_to_standard(d)
+            try:
+                openkore_sock.sendall(translated)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
+                LOG(f"[PROXY] Connection closed: {e}")
+            except Exception as e:
+                LOG(f"[PROXY] Send error: {e}")
+        elif direction == "→": # OpenKore → Server (standard → custom)
+            translated = translate_to_custom(d)
+            try:
+                server_sock.sendall(translated)
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError) as e:
+                LOG(f"[PROXY] Connection closed: {e}")
+            except Exception as e:
+                LOG(f"[PROXY] Send error: {e}")
+
+# ── StreamBuf (ใช้เหมือนเดิม) ───────────────────────────────
 class StreamBuf:
     def __init__(self, direction):
         self.buf = b''
@@ -503,18 +490,18 @@ class StreamBuf:
         """หา packet boundary แรกในกรณีที่เริ่มกลางทาง"""
         if self.synced:
             return
-        # หา switch ที่รู้จัก และไม่ใช่ 0x0000 (null/garbage)
-        for i in range(min(len(self.buf) - 1, 128)):
+        # หา switch ที่รู้จักใน buffer
+        for i in range(min(len(self.buf) - 1, 64)):
             sw = struct.unpack_from('<H', self.buf, i)[0]
-            if sw in PACKETS and sw != 0x0000:
+            if sw in PACKETS:
                 if i > 0:
                     LOG(f"  [SYNC  ] {self.dir} skipped {i} bytes to sync at 0x{sw:04X}")
                 self.buf    = self.buf[i:]
                 self.synced = True
                 return
         # ไม่เจอเลย — ถ้า buffer ใหญ่แล้วให้ drop ส่วนหน้า
-        if len(self.buf) > 64:
-            self.buf    = self.buf[-16:]
+        if len(self.buf) > 32:
+            self.buf    = self.buf[-8:]
             self.synced = False
 
     def _process(self):
@@ -562,7 +549,7 @@ class StreamBuf:
             dispatch(self.buf[:plen], self.dir)
             self.buf = self.buf[plen:]
 
-# ── Summary ───────────────────────────────────────────────
+# ── Summary (เหมือนเดิม) ─────────────────────────────────────
 def summary():
     tracker.cleanup()
     snap = mem_snapshot()
@@ -591,62 +578,85 @@ def summary():
     LOG(txt)
     log_sum.info(txt)
 
+# ── Local Proxy Threads ───────────────────────────────────────
+def relay_server_to_openkore():
+    buf = StreamBuf("←")
+    while True:
+        try:
+            data = server_sock.recv(4096)
+            if not data: break
+            buf.feed(data)
+        except:
+            break
+
+def relay_openkore_to_server():
+    buf = StreamBuf("→")
+    while True:
+        try:
+            data = openkore_sock.recv(4096)
+            if not data: break
+            custom_data = translate_to_custom(data)
+            buf.feed(custom_data)
+        except:
+            break
+
+def start_local_proxy():
+    global server_sock, openkore_sock
+    # เชื่อมต่อไปยัง BamBoo Server (Python ทำตัวเป็น client)
+    server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_sock.connect((SERVER_IP, SERVER_PORT))
+    LOG(f"  [PROXY ] Connected to real BamBoo Server {SERVER_IP}:{SERVER_PORT}")
+
+    # รอ OpenKore เชื่อมต่อ (Local Server mode)
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.bind(('127.0.0.1', SERVER_PORT))
+    listener.listen(1)
+    LOG("  [PROXY ] รอ OpenKore connect ที่ 127.0.0.1:24656 ...")
+    openkore_sock, addr = listener.accept()
+    listener.close()
+    LOG(f"  [PROXY ] OpenKore connected from {addr}")
+
+    # เริ่ม relay ทั้ง 2 ทาง
+    threading.Thread(target=relay_server_to_openkore, daemon=True).start()
+    threading.Thread(target=relay_openkore_to_server, daemon=True).start()
+
 # ── MAIN ─────────────────────────────────────────────────
 def main():
     LOG("=" * 60)
-    LOG("  RO Packet Parser v3")
+    LOG("  RO Packet Translator Proxy v3")
     LOG(f"  Server : {SERVER_IP}:{SERVER_PORT}")
-    LOG(f"  Logs   : {os.path.abspath(LOG_DIR)}/ro_*_{_ts}.log")
+    LOG("  OpenKore → connect 127.0.0.1:24656")
+    LOG(f"  Logs   : {os.path.abspath(LOG_DIR)}")
     LOG("=" * 60)
 
     init_memory(TARGET_PID)
-
-    # verify memory ครั้งแรก
     snap = mem_snapshot()
     if snap and snap['x']:
-        LOGV(f"[VERIFY] Initial memory: pos=({snap['x']},{snap['y']}) "
-             f"HP={snap['hp']}/{snap['hpmax']} SP={snap['sp']}/{snap['spmax']}")
+        LOGV(f"[VERIFY] Initial memory: pos=({snap['x']},{snap['y']}) HP={snap['hp']}/{snap['hpmax']}")
 
-    LOG("\nรัน BamBoo_Client แล้ว login ได้เลย (ควรเริ่มก่อน login map)")
-    LOG("กด Ctrl+C หยุด\n")
+    # เริ่ม Proxy
+    threading.Thread(target=start_local_proxy, daemon=True).start()
 
-    buf_sv = StreamBuf("←")
-    buf_cl = StreamBuf("→")
-
-    flt = (f"tcp and "
-           f"(ip.DstAddr=={SERVER_IP} or ip.SrcAddr=={SERVER_IP}) and "
-           f"(tcp.DstPort=={SERVER_PORT} or tcp.SrcPort=={SERVER_PORT})")
+    LOG("\n=== วิธีใช้งาน ===")
+    LOG("1. รัน BamBoo_Client.exe แล้ว login ปกติ (bypass Gepard)")
+    LOG("2. รัน OpenKore → Server = 127.0.0.1:24656")
+    LOG("3. กด Ctrl+C เพื่อหยุด\n")
 
     last_sum = time.time()
-
     try:
-        with pydivert.WinDivert(flt) as w:
-            for pkt in w:
-                w.send(pkt)
-                if not pkt.tcp or not pkt.payload:
-                    continue
-                payload = bytes(pkt.payload)
-                if len(payload) < 2:
-                    continue
-                if pkt.dst_addr == SERVER_IP:
-                    buf_cl.feed(payload)
-                else:
-                    buf_sv.feed(payload)
-
-                if time.time() - last_sum > 15:
-                    summary()
-                    last_sum = time.time()
-
+        while True:
+            time.sleep(0.5)
+            if time.time() - last_sum > 15:
+                summary()
+                last_sum = time.time()
     except KeyboardInterrupt:
         LOG("\nหยุด")
         summary()
+        if server_sock: server_sock.close()
+        if openkore_sock: openkore_sock.close()
         LOG(f"\nUnknown switches: {len(_seen_unk)} ค่า")
-        for sw, cnt in sorted(_seen_unk.items(), key=lambda x: -x[1])[:20]:
-            LOG(f"  0x{sw:04X}  x{cnt}")
-
     except Exception as e:
         LOG(f"Error: {e}")
-        LOG("ต้องรันใฐานะ Administrator")
 
 if __name__ == '__main__':
     main()

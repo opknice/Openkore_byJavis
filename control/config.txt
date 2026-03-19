@@ -3,10 +3,10 @@
 
 ######## Login options and server-specific options ########
 
-master
+master Private - Gepard Server
 server
-username
-password
+username nicecpe
+password cpe54146
 loginPinCode
 char
 otpSeed
@@ -22,7 +22,7 @@ forceMapIP
 
 # 1 = hook into RO client, 2 = Act as stand-alone proxy, proxy = act as true proxy
 # https://openkore.com/wiki/XKore
-XKore 0
+XKore 2
 XKore_port 2350
 XKore_dll NetRedirect.dll
 XKore_injectDLL 1
@@ -33,13 +33,13 @@ XKore_exeName ragexe.exe
 
 # XKore 2 / Proxy configuration
 XKore_listenIp 127.0.0.1
-XKore_listenPort 6901
+XKore_listenPort 24657
 XKore_publicIp 127.0.0.1
 XKore_ID
 
 # It is not advised to set secureAdminPassword if you're using Xkore 2
 secureAdminPassword 1
-adminPassword
+adminPassword pecrodra
 callSign
 commandPrefix ;
 callSignGM 0
@@ -594,8 +594,8 @@ attackSkillSlot {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -678,8 +678,8 @@ doCommand {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -732,8 +732,8 @@ useSelf_skill {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -790,8 +790,8 @@ partySkill {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -894,8 +894,8 @@ equipAuto {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -939,8 +939,8 @@ useSelf_item {
 	mercenary_whenIdle
 	mercenary_whenNotIdle
 	onAction
-    inQueue
-    notInQueue
+	inQueue
+	notInQueue
 	whenStatusActive
 	whenStatusInactive
 	whenFollowing
@@ -1033,3 +1033,4 @@ logToFile_Errors
 logToFile_Messages
 logToFile_Warnings
 history_max 50
+macro_orphans terminate
