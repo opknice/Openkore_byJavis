@@ -1,50 +1,50 @@
-14:10:32.872 
+14:32:33.893 
 ════════════════════════════════════════════════════════════
-  SUMMARY  14:10:32
+  SUMMARY  14:32:33
 ────────────────────────────────────────────────────────────
   Memory  : pos=(None,None) HP=None/None SP=None/None
-  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=76/76
+  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=512/1434
   Keys    : on=False src=''
-  Ports   : [22878, 23545, 25787]
+  Ports   : [22878, 25787, 23545, 24656]
 
   Monsters (0):
 
   Players (0):
 ════════════════════════════════════════════════════════════
-14:10:47.990 
+14:32:48.920 
 ════════════════════════════════════════════════════════════
-  SUMMARY  14:10:47
+  SUMMARY  14:32:48
 ────────────────────────────────────────────────────────────
   Memory  : pos=(None,None) HP=None/None SP=None/None
-  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=185/185
+  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=512/1592
   Keys    : on=False src=''
-  Ports   : [22878, 23545, 25787, 24656]
+  Ports   : [22878, 25787, 23545, 24656]
 
   Monsters (0):
 
   Players (0):
 ════════════════════════════════════════════════════════════
-14:11:03.001 
+14:33:04.097 
 ════════════════════════════════════════════════════════════
-  SUMMARY  14:11:03
+  SUMMARY  14:33:04
 ────────────────────────────────────────────────────────────
   Memory  : pos=(None,None) HP=None/None SP=None/None
-  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=328/328
+  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=512/1958
   Keys    : on=False src=''
-  Ports   : [22878, 23545, 25787, 24656]
+  Ports   : [22878, 25787, 23545, 24656]
 
   Monsters (0):
 
   Players (0):
 ════════════════════════════════════════════════════════════
-14:11:18.015 
+14:33:19.111 
 ════════════════════════════════════════════════════════════
-  SUMMARY  14:11:18
+  SUMMARY  14:33:19
 ────────────────────────────────────────────────────────────
   Memory  : pos=(None,None) HP=None/None SP=None/None
-  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=512/559
+  Gepard  : accuracy=0% hits=0 miss=0 ENC_buf=512/2163
   Keys    : on=False src=''
-  Ports   : [22878, 23545, 25787, 24656]
+  Ports   : [22878, 25787, 23545, 24656]
 
   Monsters (0):
 
