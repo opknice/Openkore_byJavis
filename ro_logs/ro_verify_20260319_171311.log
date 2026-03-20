@@ -1,0 +1,2 @@
+17:16:47.310   [VERIFY] HP: pkt=24 mem@0x015D8668 ❌ DIFF mem=44
+17:16:50.341   [VERIFY] HP: pkt=19 mem@0x015D8668 ❌ DIFF mem=44

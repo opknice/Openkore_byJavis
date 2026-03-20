@@ -1,0 +1,38 @@
+# OpenKore recvpackets — ro_packet_parser_v6
+# Session  : 20260319_171311
+# Server   : 136.110.172.32
+# Gepard   : accuracy=0.0% hits=0 miss=0
+# Keys src : none
+# VERIFY each entry before use in production
+
+0000    -1   # null_packet (←) seen=4x
+0001     2   # signal_01 (←) seen=1x
+007D     2   # map_loaded_ack (→) seen=2x
+0080     7   # actor_removed (→) seen=1x
+0086    16   # actor_moved (←) seen=20x
+0088    29   # damage (←) seen=1x
+0090   256   # ??? (←) seen=1x
+00B0     8   # stat_info (←) seen=6x
+00B6     6   # actor_coords (←) seen=25x
+0141    14   # stat_info2 (←) seen=6x
+0283    -1   # server_broadcast (←) seen=1x
+0436    -1   # map_login2 (→) seen=1x
+0694     2   # ??? (←) seen=1x
+0700     2   # ??? (←) seen=1x
+09FD    -1   # actor_display2 (←) seen=1x
+4194     2   # ??? (←) seen=1x
+4753    -1   # map_login_ack (←) seen=2x
+696C 31092   # ??? (←) seen=1x
+6C42 29541   # ??? (←) seen=1x
+7329 20889   # ??? (←) seen=1x
+9357   182   # ??? (←) seen=1x
+9499     6   # ??? (←) seen=1x
+95AF 19545   # ??? (←) seen=1x
+99A3  1684   # ??? (←) seen=1x
+A126     2   # ??? (←) seen=1x
+A143 16492   # ??? (←) seen=1x
+B4A0     2   # ??? (←) seen=1x
+B600 18176   # ??? (←) seen=1x
+C392    44   # gepard_handshake (→) seen=3x
+D228 10341   # ??? (←) seen=1x
+D749     2   # ??? (←) seen=1x
